@@ -1,0 +1,248 @@
+"use client";
+import { useState, useCallback } from "react";
+
+type Result = {
+  sym: string; signal: string; belowCount: number;
+  close: number; chg: number; ema5: number; ema8: number; ema13: number;
+  volume: number;
+};
+
+function fmtVol(v: number) {
+  if (v >= 1e9) return (v/1e9).toFixed(1)+"B";
+  if (v >= 1e6) return (v/1e6).toFixed(1)+"M";
+  if (v >= 1e3) return (v/1e3).toFixed(0)+"K";
+  return String(v);
+}
+
+export default function Home() {
+  const [minBars, setMinBars] = useState(3);
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [results, setResults] = useState<Result[]>([]);
+  const [scanned, setScanned] = useState(0);
+  const [errors, setErrors] = useState(0);
+  const [done, setDone] = useState(false);
+  const [filter, setFilter] = useState("");
+  const [sigFilter, setSigFilter] = useState("");
+  const [sortCol, setSortCol] = useState("signal");
+  const [sortDir, setSortDir] = useState(1);
+
+  const BATCH = 20;
+
+  const ALL_BIST = [
+  "ACSEL","ADEL","ADESE","AEFES","AFYON","AGESA","AGROT","AGYO","AKBNK","AKCNS",
+  "AKGRT","AKSA","AKSEN","AKSUE","AKTKS","ALARK","ALBRK","ALCAR","ALFAS","ALGYO",
+  "ALKIM","ALMAD","ALOKT","ANACM","ANHYT","ANSGR","ARCLK","ARDYZ","ARENA","ARSAN",
+  "ARZUM","ASELS","ASGYO","ASUZU","ATEKS","ATLAS","AVOD","AYEN","AYGAZ","BAGFS",
+  "BAKAB","BANVT","BARMA","BAYRK","BERA","BFREN","BIMAS","BIOEN","BIZIM","BJKAS",
+  "BLCYT","BMSTL","BNTAS","BOBET","BOLUC","BORLS","BORSK","BOSSA","BRISA","BRKSN",
+  "BRSAN","BRYAT","BSOKE","BTCIM","BUCIM","BURCE","BURVA","BVSAN","CASA","CEMAS",
+  "CEMTS","CIMSA","CLEBI","CMENT","CONSE","COSMO","CRDFA","CRFSA","CUSAN","CVKMD",
+  "DAGHL","DAGI","DAPGM","DARDL","DATNG","DENGE","DERIM","DESPC","DEVA","DGATE",
+  "DHOLD","DITAS","DOAS","DOBUR","DOCO","DOGUB","DOHOL","DOKTA","DURDO","DYOBY",
+  "DZGYO","ECILC","ECZYT","EDIP","EGGUB","EGPRO","EGSER","EKGYO","EKSUN","EMKEL",
+  "EMNIS","ENERY","ENKAI","ENTA","EPLAS","ERBOS","EREGL","ERGLI","ERHOL","ERMEM",
+  "ERSU","ESCAR","ESCOM","ESEN","ETILR","EUHOL","EUPWR","FADE","FENER","FLAP",
+  "FONET","FORTE","FRIGO","FROTO","FZLGY","GARAN","GARFA","GEDZA","GENIL","GENTS",
+  "GEREL","GESAN","GIPTA","GLBMD","GLRYH","GLYHO","GMTAS","GNPWR","GOODY","GOZDE",
+  "GRSEL","GSDHO","GSDMK","GSRAY","GUBRF","GWIND","HALKB","HATEK","HEDEF","HEKTS",
+  "HLGYO","HTTBT","HUBVC","HUNER","HURGZ","ICBCT","IDEAS","IEYHO","IHLGM","IHLAS",
+  "IHYAY","INDES","INFO","INTEM","IPEKE","ISBIR","ISDMR","ISFIN","ISGSY","ISGYO",
+  "ISKPL","ISKUR","ISMEN","ISYAT","IZFAS","IZINV","IZMDC","JANTS","KAREL","KARSN",
+  "KARTN","KATMR","KAYSE","KBORU","KCHOL","KENT","KERVN","KERVT","KFEIN","KLGYO",
+  "KLKIM","KLMSN","KLNMA","KLSER","KMPUR","KNFRT","KONYA","KORDS","KOZAA","KOZAL",
+  "KRDMA","KRDMB","KRDMD","KRONT","KRPLS","KRSTL","KRTEK","KSTUR","KUTPO","LIDER",
+  "LIDFA","LILAK","LINK","LOGO","LUKSK","MAGEN","MAKIM","MAKTK","MANAS","MARBL",
+  "MARKA","MARTI","MAVI","MEDTR","MEGAP","MEPET","MERCN","MERKO","METRO","METUR",
+  "MIGRS","MNDRS","MNDTR","MNVRL","MOBTL","MPARK","MRGYO","MSGYO","MTRKS","MZHLD",
+  "NATEN","NETAS","NIBAS","NTGAZ","NTHOL","NUGYO","NUHCM","OBASE","ODAS","OFSYM",
+  "ONCSM","ONRYT","ORCAY","ORGE","ORMA","OSMEN","OSTIM","OTKAR","OTTO","OYAKC",
+  "OYAYO","OYLUM","OZBAL","OZKGY","OZRDN","OZSUB","PAGYO","PAMEL","PANAS","PAPIL",
+  "PARSN","PEKGY","PENTA","PETKM","PETUN","PGSUS","PINSU","PKART","PKENT","PLTUR",
+  "POLTK","POLHO","PRDGS","PRKAB","PRKME","PRZMA","PTOFS","QNBFB","QNBFL","RALYH",
+  "RAYSG","RBNV","RCOLS","REYSAS","RHEAG","RNPOL","RODRG","ROYAL","RTALB","RUBNS",
+  "RYGYO","SAFKR","SAHOL","SAMAT","SANEL","SANFM","SANKO","SARKY","SASA","SAYAS",
+  "SEGYO","SEKFK","SEKUR","SELEC","SELGD","SELVA","SEYKM","SILVR","SISE","SKBNK",
+  "SKYLP","SMART","SMRTG","SNGYO","SNICA","SNKRN","SODSN","SOKE","SOKM","SONME",
+  "SRVGY","SUWEN","SVGYO","TACTR","TATGD","TAVHL","TBORG","TCELL","TDGYO","TEKTU",
+  "TEZOL","THYAO","TKFEN","TKNSA","TLMAN","TMPOL","TMSN","TOASO","TOFAS","TPVCA",
+  "TRGYO","TRILC","TSKB","TSPOR","TTKOM","TTRAK","TUCLK","TUKAS","TUPRS","TUREX",
+  "TURSG","TVRST","ULUFA","ULUSE","ULUUN","UMPAS","UNLU","USAK","UTPYA","UVITE",
+  "VAKBN","VAKFN","VAKKO","VBTYZ","VERUS","VESBE","VESTL","VKFYO","VKGYO","VKING",
+  "YAPRK","YATAS","YAYLA","YBTAS","YGYO","YKSLN","YKBNK","YUNSA","YYLGD","ZEDUR",
+  "ZRGYO","ZOREN","ZSMRD"
+  ];
+
+  const startScan = useCallback(async () => {
+    setLoading(true); setDone(false); setResults([]); setScanned(0); setErrors(0); setProgress(0);
+    let allResults: Result[] = [];
+    let totalErrors = 0;
+
+    for (let i = 0; i < ALL_BIST.length; i += BATCH) {
+      const batch = ALL_BIST.slice(i, i + BATCH);
+      try {
+        const res = await fetch(`/api/scan?minBars=${minBars}&symbols=${batch.join(",")}`);
+        const data = await res.json();
+        allResults = [...allResults, ...data.results];
+        totalErrors += data.errors.length;
+        setResults([...allResults]);
+        setScanned(i + batch.length);
+        setErrors(totalErrors);
+        setProgress(Math.round(((i + batch.length) / ALL_BIST.length) * 100));
+      } catch { totalErrors += batch.length; }
+    }
+    setDone(true); setLoading(false);
+  }, [minBars]);
+
+  const sortBy = (col: string) => {
+    if (sortCol === col) setSortDir(d => d * -1);
+    else { setSortCol(col); setSortDir(-1); }
+  };
+
+  const sigOrder: Record<string, number> = { BUY: 0, WATCH: 1, BELOW: 2 };
+  const filtered = results
+    .filter(r => (!sigFilter || r.signal === sigFilter) && (!filter || r.sym.includes(filter.toUpperCase())))
+    .sort((a, b) => {
+      if (sortCol === "signal") return (sigOrder[a.signal]??3) - (sigOrder[b.signal]??3);
+      if (sortCol === "sym") return sortDir * a.sym.localeCompare(b.sym);
+      return sortDir * ((a[sortCol as keyof Result] as number) - (b[sortCol as keyof Result] as number));
+    });
+
+  const buys = results.filter(r => r.signal === "BUY").length;
+  const watches = results.filter(r => r.signal === "WATCH").length;
+
+  const th = "px-3 py-2 text-left text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-800 whitespace-nowrap";
+  const td = "px-3 py-2 text-sm whitespace-nowrap";
+
+  return (
+    <main className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-7xl mx-auto">
+
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-lg font-bold">B</span>
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-gray-900">BIST EMA 5/8/13 Tarayıcı</h1>
+            <p className="text-xs text-gray-500">3+ mum EMA altında → tek mumda crossover → <span className="font-semibold text-amber-600">17:50 emir</span></p>
+          </div>
+        </div>
+
+        {/* Emir banner */}
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+          <span className="text-2xl font-mono font-semibold text-amber-700">17:50</span>
+          <span className="text-xs text-amber-800">Sinyal çıkan hisseler için <strong>17:50'de</strong> piyasa emri verilir. BIST kapanışı 18:00.</span>
+        </div>
+
+        {/* Kontroller */}
+        <div className="flex gap-3 items-end mb-4 flex-wrap">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Min. EMA-altı mum</label>
+            <input type="number" min={1} max={30} value={minBars}
+              onChange={e => setMinBars(+e.target.value)}
+              className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <button onClick={startScan} disabled={loading}
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium px-6 py-2 rounded-lg text-sm flex items-center gap-2">
+            {loading ? "⏳ Taranıyor..." : "🔍 Tüm BIST'i Tara"}
+          </button>
+        </div>
+
+        {/* Progress */}
+        {loading && (
+          <div className="mb-4">
+            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden mb-1">
+              <div className="h-full bg-blue-600 rounded-full transition-all" style={{width: `${progress}%`}} />
+            </div>
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>{scanned} / 500 hisse tarandı</span>
+              <span>{progress}%</span>
+            </div>
+          </div>
+        )}
+
+        {/* Badges */}
+        {results.length > 0 && (
+          <div className="flex gap-2 flex-wrap mb-3">
+            <span className="bg-green-100 text-green-800 text-xs font-medium px-3 py-1 rounded-full border border-green-200">{buys} AL sinyali</span>
+            <span className="bg-amber-100 text-amber-800 text-xs font-medium px-3 py-1 rounded-full border border-amber-200">{watches} İzleme</span>
+            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-3 py-1 rounded-full border border-blue-200">{scanned} tarandı</span>
+            <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full border border-gray-200">{errors} hata</span>
+            {done && <span className="bg-green-50 text-green-700 text-xs font-medium px-3 py-1 rounded-full border border-green-200">✓ Tamamlandı</span>}
+            <span className="bg-amber-50 text-amber-700 text-xs font-medium px-3 py-1 rounded-full border border-amber-200">⏰ 17:50 emir</span>
+          </div>
+        )}
+
+        {/* Filtreler */}
+        {results.length > 0 && (
+          <div className="flex gap-2 mb-3 flex-wrap">
+            <input placeholder="Sembol ara..." value={filter} onChange={e => setFilter(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-40" />
+            <select value={sigFilter} onChange={e => setSigFilter(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+              <option value="">Tüm sonuçlar</option>
+              <option value="BUY">Sadece AL</option>
+              <option value="WATCH">Sadece İzleme</option>
+            </select>
+          </div>
+        )}
+
+        {/* Tablo */}
+        {filtered.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className={th} onClick={() => sortBy("sym")}>Sembol</th>
+                  <th className={th} onClick={() => sortBy("close")} style={{textAlign:"right"}}>Kapanış</th>
+                  <th className={th} onClick={() => sortBy("chg")} style={{textAlign:"right"}}>Değ%</th>
+                  <th className={th} onClick={() => sortBy("ema5")} style={{textAlign:"right"}}>EMA5</th>
+                  <th className={th} onClick={() => sortBy("ema8")} style={{textAlign:"right"}}>EMA8</th>
+                  <th className={th} onClick={() => sortBy("ema13")} style={{textAlign:"right"}}>EMA13</th>
+                  <th className={th} onClick={() => sortBy("belowCount")} style={{textAlign:"right"}}>EMA-altı</th>
+                  <th className={th} onClick={() => sortBy("volume")} style={{textAlign:"right"}}>Hacim</th>
+                  <th className={th}>Durum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r, idx) => (
+                  <tr key={r.sym} className={`border-b border-gray-100 hover:bg-gray-50 ${r.signal==="BUY"?"bg-green-50":r.signal==="WATCH"?"bg-amber-50":""}`}>
+                    <td className={td}>
+                      <a href={`https://www.tradingview.com/chart/?symbol=BIST:${r.sym}`} target="_blank"
+                        className="font-semibold text-blue-600 hover:underline">{r.sym}</a>
+                    </td>
+                    <td className={td} style={{textAlign:"right"}}>{r.close} ₺</td>
+                    <td className={td} style={{textAlign:"right"}}>
+                      <span className={r.chg>=0?"text-green-700":"text-red-600"}>{r.chg>=0?"+":""}{r.chg}%</span>
+                    </td>
+                    <td className={td} style={{textAlign:"right",color:"#1a56db"}}>{r.ema5}</td>
+                    <td className={td} style={{textAlign:"right",color:"#0e7c3a"}}>{r.ema8}</td>
+                    <td className={td} style={{textAlign:"right",color:"#d97706"}}>{r.ema13}</td>
+                    <td className={td} style={{textAlign:"right",fontWeight:r.belowCount>=3?600:400}}>{r.belowCount}</td>
+                    <td className={td} style={{textAlign:"right"}}>{fmtVol(r.volume)}</td>
+                    <td className={td}>
+                      {r.signal==="BUY"
+                        ? <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full border border-green-300">✓ AL — 17:50</span>
+                        : r.signal==="WATCH"
+                        ? <span className="bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full border border-amber-300">👁 İzle ({r.belowCount} mum)</span>
+                        : <span className="text-xs text-gray-400">{r.belowCount} mum altında</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {results.length === 0 && !loading && (
+          <div className="text-center py-16 text-gray-400 text-sm">
+            "Tüm BIST'i Tara" butonuna basın
+          </div>
+        )}
+
+        <p className="text-xs text-gray-400 mt-4 text-center">Veri: Yahoo Finance günlük. Yatırım tavsiyesi değildir.</p>
+      </div>
+    </main>
+  );
+}

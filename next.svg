@@ -1,0 +1,124 @@
+import { NextRequest, NextResponse } from "next/server";
+import yahooFinance from "yahoo-finance2";
+
+const ALL_BIST = [
+  "ACSEL","ADEL","ADESE","AEFES","AFYON","AGESA","AGROT","AGYO","AKBNK","AKCNS",
+  "AKGRT","AKSA","AKSEN","AKSUE","AKTKS","ALARK","ALBRK","ALCAR","ALFAS","ALGYO",
+  "ALKIM","ALMAD","ALOKT","ANACM","ANHYT","ANSGR","ARCLK","ARDYZ","ARENA","ARSAN",
+  "ARZUM","ASELS","ASGYO","ASUZU","ATEKS","ATLAS","AVOD","AYEN","AYGAZ","BAGFS",
+  "BAKAB","BANVT","BARMA","BAYRK","BERA","BFREN","BIMAS","BIOEN","BIZIM","BJKAS",
+  "BLCYT","BMSTL","BNTAS","BOBET","BOLUC","BORLS","BORSK","BOSSA","BRISA","BRKSN",
+  "BRSAN","BRYAT","BSOKE","BTCIM","BUCIM","BURCE","BURVA","BVSAN","CASA","CEMAS",
+  "CEMTS","CIMSA","CLEBI","CMENT","CONSE","COSMO","CRDFA","CRFSA","CUSAN","CVKMD",
+  "DAGHL","DAGI","DAPGM","DARDL","DATNG","DENGE","DERIM","DESPC","DEVA","DGATE",
+  "DHOLD","DITAS","DOAS","DOBUR","DOCO","DOGUB","DOHOL","DOKTA","DURDO","DYOBY",
+  "DZGYO","ECILC","ECZYT","EDIP","EGGUB","EGPRO","EGSER","EKGYO","EKSUN","EMKEL",
+  "EMNIS","ENERY","ENKAI","ENTA","EPLAS","ERBOS","EREGL","ERGLI","ERHOL","ERMEM",
+  "ERSU","ESCAR","ESCOM","ESEN","ETILR","EUHOL","EUPWR","FADE","FENER","FLAP",
+  "FONET","FORTE","FRIGO","FROTO","FZLGY","GARAN","GARFA","GEDZA","GENIL","GENTS",
+  "GEREL","GESAN","GIPTA","GLBMD","GLRYH","GLYHO","GMTAS","GNPWR","GOODY","GOZDE",
+  "GRSEL","GSDHO","GSDMK","GSRAY","GUBRF","GWIND","HALKB","HATEK","HEDEF","HEKTS",
+  "HLGYO","HTTBT","HUBVC","HUNER","HURGZ","ICBCT","IDEAS","IEYHO","IHLGM","IHLAS",
+  "IHYAY","INDES","INFO","INTEM","IPEKE","ISBIR","ISDMR","ISFIN","ISGSY","ISGYO",
+  "ISKPL","ISKUR","ISMEN","ISYAT","IZFAS","IZINV","IZMDC","JANTS","KAREL","KARSN",
+  "KARTN","KATMR","KAYSE","KBORU","KCHOL","KENT","KERVN","KERVT","KFEIN","KLGYO",
+  "KLKIM","KLMSN","KLNMA","KLSER","KMPUR","KNFRT","KONYA","KORDS","KOZAA","KOZAL",
+  "KRDMA","KRDMB","KRDMD","KRONT","KRPLS","KRSTL","KRTEK","KSTUR","KUTPO","LIDER",
+  "LIDFA","LILAK","LINK","LOGO","LUKSK","MAGEN","MAKIM","MAKTK","MANAS","MARBL",
+  "MARKA","MARTI","MAVI","MEDTR","MEGAP","MEPET","MERCN","MERKO","METRO","METUR",
+  "MIGRS","MNDRS","MNDTR","MNVRL","MOBTL","MPARK","MRGYO","MSGYO","MTRKS","MZHLD",
+  "NATEN","NETAS","NIBAS","NTGAZ","NTHOL","NUGYO","NUHCM","OBASE","ODAS","OFSYM",
+  "ONCSM","ONRYT","ORCAY","ORGE","ORMA","OSMEN","OSTIM","OTKAR","OTTO","OYAKC",
+  "OYAYO","OYLUM","OZBAL","OZKGY","OZRDN","OZSUB","PAGYO","PAMEL","PANAS","PAPIL",
+  "PARSN","PEKGY","PENTA","PETKM","PETUN","PGSUS","PINSU","PKART","PKENT","PLTUR",
+  "POLTK","POLHO","PRDGS","PRKAB","PRKME","PRZMA","PTOFS","QNBFB","QNBFL","RALYH",
+  "RAYSG","RBNV","RCOLS","REYSAS","RHEAG","RNPOL","RODRG","ROYAL","RTALB","RUBNS",
+  "RYGYO","SAFKR","SAHOL","SAMAT","SANEL","SANFM","SANKO","SARKY","SASA","SAYAS",
+  "SEGYO","SEKFK","SEKUR","SELEC","SELGD","SELVA","SEYKM","SILVR","SISE","SKBNK",
+  "SKYLP","SMART","SMRTG","SNGYO","SNICA","SNKRN","SODSN","SOKE","SOKM","SONME",
+  "SRVGY","SUWEN","SVGYO","TACTR","TATGD","TAVHL","TBORG","TCELL","TDGYO","TEKTU",
+  "TEZOL","THYAO","TKFEN","TKNSA","TLMAN","TMPOL","TMSN","TOASO","TOFAS","TPVCA",
+  "TRGYO","TRILC","TSKB","TSPOR","TTKOM","TTRAK","TUCLK","TUKAS","TUPRS","TUREX",
+  "TURSG","TVRST","ULUFA","ULUSE","ULUUN","UMPAS","UNLU","USAK","UTPYA","UVITE",
+  "VAKBN","VAKFN","VAKKO","VBTYZ","VERUS","VESBE","VESTL","VKFYO","VKGYO","VKING",
+  "YAPRK","YATAS","YAYLA","YBTAS","YGYO","YKSLN","YKBNK","YUNSA","YYLGD","ZEDUR",
+  "ZRGYO","ZOREN","ZSMRD"
+];
+
+function calcEMA(prices: number[], period: number): number[] {
+  const k = 2 / (period + 1);
+  const ema: number[] = [prices[0]];
+  for (let i = 1; i < prices.length; i++)
+    ema.push(prices[i] * k + ema[i - 1] * (1 - k));
+  return ema;
+}
+
+function analyzeSignal(closes: number[], minBars: number) {
+  if (closes.length < 20) return null;
+  const e5 = calcEMA(closes, 5);
+  const e8 = calcEMA(closes, 8);
+  const e13 = calcEMA(closes, 13);
+  const i = closes.length - 1;
+
+  const aboveAll = closes[i] > e5[i] && closes[i] > e8[i] && closes[i] > e13[i];
+  const belowAll = closes[i] < e5[i] && closes[i] < e8[i] && closes[i] < e13[i];
+  const prevBelowAll = closes[i-1] < e5[i-1] && closes[i-1] < e8[i-1] && closes[i-1] < e13[i-1];
+
+  let prevBelow = 0;
+  for (let j = i - 1; j >= 0; j--) {
+    if (closes[j] < e5[j] && closes[j] < e8[j] && closes[j] < e13[j]) prevBelow++;
+    else break;
+  }
+
+  let currBelow = 0;
+  for (let j = i; j >= 0; j--) {
+    if (closes[j] < e5[j] && closes[j] < e8[j] && closes[j] < e13[j]) currBelow++;
+    else break;
+  }
+
+  let signal = "none";
+  let belowCount = 0;
+  if (aboveAll && prevBelowAll && prevBelow >= minBars) { signal = "BUY"; belowCount = prevBelow; }
+  else if (belowAll && currBelow >= minBars) { signal = "WATCH"; belowCount = currBelow; }
+  else if (belowAll) { signal = "BELOW"; belowCount = currBelow; }
+
+  return { signal, belowCount, close: closes[i], ema5: e5[i], ema8: e8[i], ema13: e13[i] };
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const minBars = parseInt(searchParams.get("minBars") || "3");
+  const symParam = searchParams.get("symbols") || "";
+  const list = symParam ? symParam.split(",").filter(Boolean) : ALL_BIST;
+
+  const results: any[] = [];
+  const errors: string[] = [];
+
+  for (const sym of list) {
+    try {
+      const data: any = await yahooFinance.chart(`${sym}.IS`, {
+        period1: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+        period2: new Date(),
+        interval: "1d",
+      });
+      const quotes = data.quotes || [];
+      const closes = quotes.map((q: any) => q.close).filter((c: any): c is number => typeof c === "number");
+      if (closes.length < 20) continue;
+      const a = analyzeSignal(closes, minBars);
+      if (!a || a.signal === "none") continue;
+      const prev = quotes[quotes.length - 2];
+      const chg = prev?.close ? ((closes[closes.length-1] - prev.close) / prev.close) * 100 : 0;
+      results.push({
+        sym, signal: a.signal, belowCount: a.belowCount,
+        close: +a.close.toFixed(2), chg: +chg.toFixed(2),
+        ema5: +a.ema5.toFixed(2), ema8: +a.ema8.toFixed(2), ema13: +a.ema13.toFixed(2),
+        volume: quotes[quotes.length-1]?.volume || 0,
+      });
+    } catch { errors.push(sym); }
+  }
+
+  const order: Record<string, number> = { BUY: 0, WATCH: 1, BELOW: 2 };
+  results.sort((a, b) => (order[a.signal] ?? 3) - (order[b.signal] ?? 3));
+
+  return NextResponse.json({ results, errors, total: list.length });
+}
